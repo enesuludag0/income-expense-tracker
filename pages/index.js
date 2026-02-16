@@ -1,78 +1,150 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { useState, useEffect } from "react";
+import TransactionForm from "../components/TransactionForm";
+import TransactionList from "../components/TransactionList";
+import Summary from "../components/Summary";
+import Filters from "../components/Filters";
+import Head from "next/head";
 
 export default function Home() {
+  const [transactions, setTransactions] = useState([]);
+  const [filters, setFilters] = useState({ type: "all", category: "all", sort: "desc", amountSort: "none", search: "" });
+
+  // Load transactions from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("transactions");
+    if (saved) {
+      setTransactions(JSON.parse(saved));
+    }
+  }, []);
+
+  // Save transactions to localStorage
+  useEffect(() => {
+    localStorage.setItem("transactions", JSON.stringify(transactions));
+  }, [transactions]);
+
+  const addTransaction = (transaction) => {
+    setTransactions([{ ...transaction, id: crypto.randomUUID() }, ...transactions]);
+  };
+
+  const deleteTransaction = (id) => {
+    setTransactions(transactions.filter((t) => t.id !== id));
+  };
+
+  const updateTransaction = (id, updatedData) => {
+    setTransactions(transactions.map((t) => (t.id === id ? { ...t, ...updatedData } : t)));
+  };
+
+  let filteredTransactions = transactions.filter((t) => {
+    if (filters.type !== "all" && t.type !== filters.type) return false;
+
+    if (filters.category !== "all") {
+      if (filters.type === "all") {
+        // category stored as "type-name" when type is all
+        const parts = String(filters.category).split("-");
+        if (parts.length === 2) {
+          const [catType, catName] = parts;
+          if (t.type !== catType || t.category !== catName) return false;
+        } else {
+          // fallback to plain name
+          if (t.category !== filters.category) return false;
+        }
+      } else {
+        if (t.category !== filters.category) return false;
+      }
+    }
+
+    if (filters.search && !t.title.toLowerCase().includes(filters.search.toLowerCase())) return false;
+    return true;
+  });
+
+  // For summary, don't filter by search
+  let summaryTransactions = transactions.filter((t) => {
+    if (filters.type !== "all" && t.type !== filters.type) return false;
+
+    if (filters.category !== "all") {
+      if (filters.type === "all") {
+        const parts = String(filters.category).split("-");
+        if (parts.length === 2) {
+          const [catType, catName] = parts;
+          if (t.type !== catType || t.category !== catName) return false;
+        } else {
+          if (t.category !== filters.category) return false;
+        }
+      } else {
+        if (t.category !== filters.category) return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Sort transactions
+  filteredTransactions = filteredTransactions.sort((a, b) => {
+    const sortType = filters.sortType || "default";
+
+    // Varsayılan: sıralama yok
+    if (sortType === "default") {
+      return 0; // Ekleme sırasını koru
+    }
+
+    const [sortBy, sortOrder] = sortType.split("_");
+
+    if (sortBy === "tutar") {
+      const amountDiff = sortOrder === "asc" ? a.amount - b.amount : b.amount - a.amount;
+      if (amountDiff !== 0) return amountDiff;
+      // Tutar eşitse tarih'e göre (en yeni)
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateB - dateA;
+    } else {
+      // tarih
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+    }
+  });
+
   return (
-    <div
-      className={`${geistSans.className} ${geistMono.className} flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black`}
-    >
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the index.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <Head>
+        <title>Gelir & Gider Takip Sistemi</title>
+        <meta name="description" content="Gelir ve giderlerinizi takip etmek için basit ve etkili bir sistem" />
+      </Head>
+
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+        <div className="max-w-[948px] mx-auto">
+          <h1 className="text-4xl font-bold text-gray-800 mb-8 text-center">Gelir & Gider Takip Sistemi</h1>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <TransactionForm onAdd={addTransaction} />
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="lg:col-span-2">
+              <div className="mb-6">
+                <Summary transactions={summaryTransactions} />
+              </div>
+
+              <div className="mb-6">
+                <Filters filters={filters} setFilters={setFilters} />
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <TransactionList
+                  transactions={filteredTransactions}
+                  totalTransactions={transactions.length}
+                  onDelete={deleteTransaction}
+                  onUpdate={updateTransaction}
+                />
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs/pages/getting-started?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }
